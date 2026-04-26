@@ -29,3 +29,14 @@ export function withTransformation(url: string, transform: string): string {
 export function thumbUrl(url: string, size = 96): string {
   return withTransformation(url, `c_fill,w_${size},h_${size},f_auto,q_auto`);
 }
+
+/**
+ * Wraps a Cloudinary URL in our /api/files/view proxy so the file is served
+ * with `Content-Disposition: inline` (browser preview) instead of the
+ * default `attachment` (force download). Use this for the "Open" link on
+ * file attachments — especially PDFs.
+ */
+export function inlineViewUrl(url: string): string {
+  if (typeof url !== "string" || !url) return url;
+  return `/api/files/view?url=${encodeURIComponent(url)}`;
+}

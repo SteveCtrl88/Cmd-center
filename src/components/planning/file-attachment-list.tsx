@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  Download,
   ExternalLink,
   File,
   FileArchive,
@@ -15,7 +16,11 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { NoteAttachment } from "@/lib/api-client";
-import { thumbUrl, isCloudinaryImageUrl } from "@/lib/cloudinary-url";
+import {
+  thumbUrl,
+  isCloudinaryImageUrl,
+  inlineViewUrl,
+} from "@/lib/cloudinary-url";
 
 interface FileAttachmentListProps {
   value: NoteAttachment[];
@@ -144,13 +149,21 @@ export function FileAttachmentList({
                 </div>
               </div>
               <a
-                href={att.url}
+                href={inlineViewUrl(att.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Open in new tab"
+                title="View in new tab"
               >
                 <ExternalLink className="h-4 w-4" />
+              </a>
+              <a
+                href={att.url}
+                download={att.name}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Download"
+              >
+                <Download className="h-4 w-4" />
               </a>
               <button
                 type="button"
