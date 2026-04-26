@@ -525,17 +525,10 @@ function uploadImageToEditor(view: any, file: File) {
     dispatch(state.tr.replaceSelectionWith(node));
 
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload/image", {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Upload failed");
-      }
-      const data = (await res.json()) as { url: string };
+      // Direct-to-Cloudinary upload bypasses Vercel's 4.5MB body limit,
+      // which would otherwise reject any image larger than ~4MB.
+      const { uploadDirect } = await import("@/lib/cloudinary-upload");
+      const data = await uploadDirect(file, { resourceType: "image" });
 
       // Replace any image with our placeholder data attribute with the real URL.
       const newState = view.state;

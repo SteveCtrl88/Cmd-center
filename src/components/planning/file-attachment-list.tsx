@@ -9,18 +9,19 @@ import {
   FileAudio,
   FileText,
   FileVideo,
-  Loader2,
   Plus,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { NoteAttachment } from "@/lib/api-client";
 import {
   thumbUrl,
   isCloudinaryImageUrl,
   inlineViewUrl,
 } from "@/lib/cloudinary-url";
+import { uploadDirect } from "@/lib/cloudinary-upload";
 
 interface FileAttachmentListProps {
   value: NoteAttachment[];
@@ -32,49 +33,72 @@ interface FileAttachmentListProps {
   readonly?: boolean;
 }
 
+interface UploadingItem {
+  id: string;
+  name: string;
+  size: number;
+  contentType: string;
+  progress: number;
+}
+
 export function FileAttachmentList({
   value,
   onChange,
   readonly = false,
 }: FileAttachmentListProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState<UploadingItem[]>([]);
+  const [confirmIndex, setConfirmIndex] = React.useState<number | null>(null);
 
   const handleFiles = async (files: FileList | File[]) => {
     const arr = Array.from(files);
     if (arr.length === 0) return;
-    setBusy(true);
-    try {
-      const uploaded: NoteAttachment[] = [];
-      for (const file of arr) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/upload/file", {
-          method: "POST",
-          body: fd,
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          toast.error(`${file.name}: ${err.error ?? "upload failed"}`);
-          continue;
+
+    // Spawn an UploadingItem per file so the UI reflects each in parallel.
+    const items: UploadingItem[] = arr.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file.name,
+      size: file.size,
+      contentType: file.type,
+      progress: 0,
+    }));
+    setUploading((prev) => [...prev, ...items]);
+
+    // Run uploads concurrently — each one resolves independently.
+    await Promise.all(
+      arr.map(async (file, i) => {
+        const localId = items[i].id;
+        try {
+          const uploaded = await uploadDirect(file, {
+            onProgress: (pct) => {
+              setUploading((prev) =>
+                prev.map((u) => (u.id === localId ? { ...u, progress: pct } : u))
+              );
+            },
+          });
+          // Remove from in-flight, append to value
+          setUploading((prev) => prev.filter((u) => u.id !== localId));
+          onChange([
+            ...value,
+            {
+              publicId: uploaded.publicId,
+              url: uploaded.url,
+              name: uploaded.name,
+              contentType: uploaded.contentType,
+              size: uploaded.size,
+            },
+          ]);
+        } catch (err) {
+          setUploading((prev) => prev.filter((u) => u.id !== localId));
+          toast.error(`${file.name}: ${(err as Error).message}`);
         }
-        const data = await res.json();
-        uploaded.push({
-          publicId: data.publicId,
-          url: data.url,
-          name: data.name,
-          contentType: data.contentType,
-          size: data.size,
-        });
-      }
-      if (uploaded.length) {
-        onChange([...value, ...uploaded]);
-        toast.success(
-          `${uploaded.length} file${uploaded.length === 1 ? "" : "s"} attached`
-        );
-      }
-    } finally {
-      setBusy(false);
+      })
+    );
+
+    if (items.length > 0) {
+      toast.success(
+        `${items.length} file${items.length === 1 ? "" : "s"} uploaded`
+      );
     }
   };
 
@@ -120,9 +144,9 @@ export function FileAttachmentList({
           className="flex items-center justify-between gap-2 rounded-md border-2 border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors"
         >
           <span>
-            {busy
-              ? "Uploading…"
-              : "Drop files here, or paste — 50MB max per file"}
+            {uploading.length > 0
+              ? `Uploading ${uploading.length} file${uploading.length === 1 ? "" : "s"}…`
+              : "Drop files here, or paste — uploads go straight to Cloudinary"}
           </span>
           <Button
             type="button"
@@ -130,18 +154,40 @@ export function FileAttachmentList({
             size="sm"
             className="gap-2"
             onClick={() => inputRef.current?.click()}
-            disabled={busy}
           >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
+            <Plus className="h-4 w-4" />
             Add files
           </Button>
         </div>
       )}
 
+      {/* In-flight uploads with progress bars */}
+      {uploading.length > 0 && (
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {uploading.map((u) => (
+            <li
+              key={u.id}
+              className="flex items-center gap-3 rounded-md border border-border bg-card p-3"
+            >
+              <FileTypeIcon type={u.contentType} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{u.name}</div>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded bg-muted">
+                  <div
+                    className="h-full bg-primary transition-[width] duration-100"
+                    style={{ width: `${u.progress}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {humanSize(u.size)} · {u.progress}%
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Saved attachments */}
       {value.length > 0 && (
         <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {value.map((att, i) => (
@@ -175,9 +221,7 @@ export function FileAttachmentList({
               </a>
               <button
                 type="button"
-                onClick={() =>
-                  onChange(value.filter((_, idx) => idx !== i))
-                }
+                onClick={() => setConfirmIndex(i)}
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                 title="Remove"
               >
@@ -187,6 +231,29 @@ export function FileAttachmentList({
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={confirmIndex !== null}
+        onOpenChange={(open) => !open && setConfirmIndex(null)}
+        title="Remove attachment?"
+        description={
+          confirmIndex !== null && value[confirmIndex] ? (
+            <>
+              <strong>{value[confirmIndex].name}</strong> will be removed from
+              this note. The file stays in your Cloudinary account, but the
+              link in this note is gone.
+            </>
+          ) : null
+        }
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (confirmIndex !== null) {
+            onChange(value.filter((_, idx) => idx !== confirmIndex));
+            setConfirmIndex(null);
+          }
+        }}
+      />
     </div>
   );
 }
