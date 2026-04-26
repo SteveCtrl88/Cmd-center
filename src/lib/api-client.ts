@@ -52,6 +52,35 @@ export interface ProjectListItem {
   updatedAt: string;
 }
 
+export interface DealItem {
+  _id: string;
+  userId: string;
+  lightfieldId: string;
+  name: string;
+  accountName: string;
+  stage: string;
+  amount: number | string | null;
+  nextSteps: string;
+  owner: string;
+  description: string;
+  httpLink: string;
+  followUps: { _id?: string; task: string; assignee: string; dueDate?: string }[];
+  rawFields: Record<string, { value: unknown; valueType?: string }>;
+  lightfieldCreatedAt?: string;
+  lightfieldUpdatedAt?: string;
+  aiSummary: string;
+  aiSummaryAt?: string;
+  cachedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealsResponse {
+  deals: DealItem[];
+  lastCachedAt: string | null;
+  count: number;
+}
+
 export interface NoteAttachment {
   _id?: string;
   publicId: string;
