@@ -5,23 +5,29 @@ import { withApiContext, apiError } from "@/lib/api-helpers";
 import { Note } from "@/models/Note";
 import { Project } from "@/models/Project";
 
+const LinkInput = z.object({
+  url: z.string().url(),
+  title: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  thumbnail: z.string().optional().default(""),
+  siteName: z.string().optional().default(""),
+});
+
+const AttachmentInput = z.object({
+  publicId: z.string(),
+  url: z.string().url(),
+  name: z.string(),
+  contentType: z.string().optional().default(""),
+  size: z.number().optional().default(0),
+});
+
 const CreateNoteSchema = z.object({
   projectId: z.string(),
   title: z.string().min(1).max(200),
-  body: z.string().optional().default(""),
+  body: z.string().optional().default(""), // HTML
   tags: z.array(z.string()).optional().default([]),
-  links: z
-    .array(
-      z.object({
-        url: z.string().url(),
-        title: z.string().optional().default(""),
-        description: z.string().optional().default(""),
-        thumbnail: z.string().optional().default(""),
-        siteName: z.string().optional().default(""),
-      })
-    )
-    .optional()
-    .default([]),
+  links: z.array(LinkInput).optional().default([]),
+  attachments: z.array(AttachmentInput).optional().default([]),
 });
 
 /** GET /api/notes?projectId=... */

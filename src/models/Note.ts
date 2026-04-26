@@ -12,13 +12,34 @@ const LinkSchema = new Schema(
   { _id: true }
 );
 
+/**
+ * Inline images embedded by the rich-text editor live inside the `body` HTML
+ * directly (as <img> tags pointing to Cloudinary URLs). The legacy `images`
+ * field is kept for backwards compatibility but is unused by the WYSIWYG flow.
+ */
 const ImageSchema = new Schema(
   {
-    publicId: { type: String, required: true }, // Cloudinary public_id
+    publicId: { type: String, required: true },
     url: { type: String, required: true },
     caption: { type: String, default: "" },
     width: Number,
     height: Number,
+    addedAt: { type: Date, default: () => new Date() },
+  },
+  { _id: true }
+);
+
+/**
+ * Non-image attachments — PDFs, docs, audio, video, anything. Rendered as
+ * a card row below the note body.
+ */
+const AttachmentSchema = new Schema(
+  {
+    publicId: { type: String, required: true }, // Cloudinary public_id
+    url: { type: String, required: true }, // signed/secure URL
+    name: { type: String, required: true }, // original filename
+    contentType: { type: String, default: "" }, // MIME
+    size: { type: Number, default: 0 }, // bytes
     addedAt: { type: Date, default: () => new Date() },
   },
   { _id: true }
@@ -54,11 +75,16 @@ const NoteSchema = new Schema(
     },
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true, trim: true, maxlength: 200 },
-    body: { type: String, default: "" }, // markdown
+    /**
+     * Rich-text body — HTML emitted by TipTap. May contain inline <img> tags
+     * served from Cloudinary. Empty string is valid (= no body yet).
+     */
+    body: { type: String, default: "" },
     tags: { type: [String], default: [] },
     links: { type: [LinkSchema], default: [] },
-    images: { type: [ImageSchema], default: [] }, // Phase 3b
-    driveRefs: { type: [DriveRefSchema], default: [] }, // Phase 3b
+    images: { type: [ImageSchema], default: [] }, // legacy, see comment above
+    attachments: { type: [AttachmentSchema], default: [] },
+    driveRefs: { type: [DriveRefSchema], default: [] }, // Phase 3c
     aiSummary: { type: String, default: "" },
     aiSummaryAt: Date,
   },

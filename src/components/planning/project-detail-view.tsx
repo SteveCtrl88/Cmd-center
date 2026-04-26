@@ -30,7 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { TagInput } from "@/components/planning/tag-input";
 import { ColorSwatchPicker } from "@/components/planning/color-swatch-picker";
 import { NoteEditor } from "@/components/planning/note-editor";
-import { MarkdownRenderer } from "@/components/planning/markdown-renderer";
+import { HtmlRenderer } from "@/components/planning/html-renderer";
+import { FileAttachmentList } from "@/components/planning/file-attachment-list";
 
 interface ProjectDetailViewProps {
   projectId: string;
@@ -329,7 +330,11 @@ function NoteCard({
 }) {
   const [expanded, setExpanded] = React.useState(false);
 
-  const preview = (note.body || "").split("\n").slice(0, 2).join("\n");
+  // Strip HTML tags for the collapsed preview
+  const preview = htmlToText(note.body || "")
+    .split(/\n+/)
+    .slice(0, 2)
+    .join(" ");
 
   return (
     <article className="rounded-lg border border-border bg-card">
@@ -395,7 +400,19 @@ function NoteCard({
 
       {expanded && (
         <div className="border-t border-border p-4 pt-3 space-y-4">
-          <MarkdownRenderer>{note.body}</MarkdownRenderer>
+          <HtmlRenderer>{note.body}</HtmlRenderer>
+
+          {note.attachments?.length > 0 && (
+            <div>
+              <h4 className="mb-2 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <FileText className="h-3 w-3" /> Attachments ({note.attachments.length})
+              </h4>
+              <FileAttachmentList
+                value={note.attachments}
+                onChange={() => { /* read-only display */ }}
+              />
+            </div>
+          )}
 
           {note.links?.length > 0 && (
             <div>
@@ -454,7 +471,25 @@ function NoteCard({
   );
 }
 
-function countWords(s: string): number {
-  if (!s) return 0;
-  return s.trim().split(/\s+/).filter(Boolean).length;
+function countWords(html: string): number {
+  if (!html) return 0;
+  return htmlToText(html).trim().split(/\s+/).filter(Boolean).length;
+}
+
+function htmlToText(html: string): string {
+  if (!html) return "";
+  // Server-side render of project-detail-view passes through this too — keep
+  // it dependency-free so it runs anywhere.
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<\/?[^>]+(>|$)/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }

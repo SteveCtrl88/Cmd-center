@@ -52,11 +52,22 @@ export interface ProjectListItem {
   updatedAt: string;
 }
 
+export interface NoteAttachment {
+  _id?: string;
+  publicId: string;
+  url: string;
+  name: string;
+  contentType: string;
+  size: number;
+  addedAt?: string;
+}
+
 export interface NoteItem {
   _id: string;
   projectId: string;
   userId: string;
   title: string;
+  /** HTML body emitted by the rich-text editor. May contain <img> tags. */
   body: string;
   tags: string[];
   links: {
@@ -69,6 +80,7 @@ export interface NoteItem {
     addedAt?: string;
   }[];
   images: unknown[];
+  attachments: NoteAttachment[];
   driveRefs: unknown[];
   aiSummary: string;
   createdAt: string;

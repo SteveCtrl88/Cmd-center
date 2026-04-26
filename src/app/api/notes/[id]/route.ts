@@ -5,21 +5,28 @@ import { withApiContext, apiError } from "@/lib/api-helpers";
 import { Note } from "@/models/Note";
 import { Project } from "@/models/Project";
 
+const LinkInput = z.object({
+  url: z.string().url(),
+  title: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  thumbnail: z.string().optional().default(""),
+  siteName: z.string().optional().default(""),
+});
+
+const AttachmentInput = z.object({
+  publicId: z.string(),
+  url: z.string().url(),
+  name: z.string(),
+  contentType: z.string().optional().default(""),
+  size: z.number().optional().default(0),
+});
+
 const UpdateNoteSchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  body: z.string().optional(),
+  body: z.string().optional(), // HTML
   tags: z.array(z.string()).optional(),
-  links: z
-    .array(
-      z.object({
-        url: z.string().url(),
-        title: z.string().optional().default(""),
-        description: z.string().optional().default(""),
-        thumbnail: z.string().optional().default(""),
-        siteName: z.string().optional().default(""),
-      })
-    )
-    .optional(),
+  links: z.array(LinkInput).optional(),
+  attachments: z.array(AttachmentInput).optional(),
 });
 
 function objectIdOrThrow(id: string) {
