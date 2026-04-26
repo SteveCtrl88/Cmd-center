@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCloudinary } from "@/lib/cloudinary";
 
 /**
  * GET /api/files/view?url=<cloudinary-url>&type=<mime>
  *
  * Streams a Cloudinary file through our server with `Content-Disposition: inline`
  * so PDFs (and other browser-renderable types) open in the viewer instead of
- * being force-downloaded — Cloudinary's default for `raw` resources is
- * `attachment` plus `Content-Type: application/octet-stream`, which the
- * browser treats as "save as".
+ * being force-downloaded.
  *
- * Content-Type resolution (highest priority first):
- *   1. ?type=… query param (caller knows the original MIME — best)
- *   2. URL extension sniff (.pdf, .png, etc.)
- *   3. Upstream Content-Type (only if it's not the generic
- *      application/octet-stream that prevents inline rendering)
- *   4. application/octet-stream as a last resort
+ * Why we re-sign the URL: Cloudinary accounts can be configured to require
+ * authentication for delivery URLs (strict mode / restricted media types).
+ * In that case the raw CDN URL we stored returns 401. Re-signing with our
+ * API_SECRET via the SDK produces a `s--<signature>--/` URL that's accepted
+ * regardless of strict-mode settings, with no dashboard tweaks required.
  *
  * Security: only proxies URLs hosted on the user's own Cloudinary cloud,
  * preventing this endpoint from being used as an SSRF vehicle.
@@ -46,9 +44,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const fetchUrl = signCloudinaryUrl(target, cloudName) ?? target;
+
   let upstream: Response;
   try {
-    upstream = await fetch(target, { cache: "no-store" });
+    upstream = await fetch(fetchUrl, { cache: "no-store" });
   } catch (err) {
     console.error("[files/view] fetch failed", err);
     return NextResponse.json(
@@ -58,6 +58,25 @@ export async function GET(req: NextRequest) {
   }
 
   if (!upstream.ok || !upstream.body) {
+    // If the signed fetch failed, fall back to the bare URL — covers the
+    // case where the asset really is public and the parser misread the URL.
+    if (fetchUrl !== target) {
+      try {
+        upstream = await fetch(target, { cache: "no-store" });
+      } catch {
+        // ignore — handled below
+      }
+    }
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    const bodyText = await upstream.text().catch(() => "");
+    console.error(
+      "[files/view] upstream",
+      upstream.status,
+      target,
+      bodyText.slice(0, 200)
+    );
     return NextResponse.json(
       { error: `Upstream returned ${upstream.status}` },
       { status: upstream.status === 404 ? 404 : 502 }
@@ -80,11 +99,45 @@ export async function GET(req: NextRequest) {
   headers.set("content-type", contentType);
   if (upstreamLen) headers.set("content-length", upstreamLen);
   headers.set("content-disposition", `inline; filename="${filename}"`);
-  // PDF viewer plugins generally want X-Content-Type-Options NOT to be
-  // nosniff so they can probe — leaving the header off is fine here.
   headers.set("cache-control", "private, max-age=300");
 
   return new NextResponse(upstream.body, { status: 200, headers });
+}
+
+/**
+ * Parse a Cloudinary delivery URL and re-sign via the SDK. Returns null if
+ * the URL doesn't match the expected shape (in which case we just fetch as-is).
+ */
+function signCloudinaryUrl(url: string, cloudName: string): string | null {
+  // Pattern: https://res.cloudinary.com/<cloud>/<resource_type>/upload/[<transforms>/]?[v<version>/]<publicId>
+  const escaped = cloudName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const re = new RegExp(
+    `^https?://res\\.cloudinary\\.com/${escaped}/(image|raw|video)/upload/` +
+      // Optional transformation/signature segments — skip them
+      `(?:(?:[a-z]_[^/]+|s--[^/]+--)/)*?` +
+      `(?:v(\\d+)/)?` +
+      `(.+?)$`
+  );
+  const m = url.match(re);
+  if (!m) return null;
+
+  const resourceType = m[1] as "image" | "raw" | "video";
+  const version = m[2] ? parseInt(m[2], 10) : undefined;
+  const publicId = m[3];
+
+  try {
+    const c = getCloudinary();
+    return c.url(publicId, {
+      resource_type: resourceType,
+      type: "upload",
+      sign_url: true,
+      secure: true,
+      version,
+    });
+  } catch (err) {
+    console.error("[files/view] signCloudinaryUrl failed", err);
+    return null;
+  }
 }
 
 function resolveContentType({
@@ -102,10 +155,7 @@ function resolveContentType({
   const sniffed = MIME_BY_EXT[ext];
   if (sniffed) return sniffed;
 
-  // Use upstream only if it's not the generic catch-all that disables
-  // inline rendering.
   if (upstream && !/^application\/octet-stream/i.test(upstream)) return upstream;
-
   return upstream || "application/octet-stream";
 }
 
