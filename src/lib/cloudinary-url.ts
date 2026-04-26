@@ -33,10 +33,15 @@ export function thumbUrl(url: string, size = 96): string {
 /**
  * Wraps a Cloudinary URL in our /api/files/view proxy so the file is served
  * with `Content-Disposition: inline` (browser preview) instead of the
- * default `attachment` (force download). Use this for the "Open" link on
- * file attachments — especially PDFs.
+ * default `attachment` (force download).
+ *
+ * Always pass the original contentType when known — it's the only reliable
+ * way to get inline PDF rendering, since Cloudinary's `raw` resources are
+ * served as `application/octet-stream`.
  */
-export function inlineViewUrl(url: string): string {
+export function inlineViewUrl(url: string, contentType?: string): string {
   if (typeof url !== "string" || !url) return url;
-  return `/api/files/view?url=${encodeURIComponent(url)}`;
+  const params = new URLSearchParams({ url });
+  if (contentType) params.set("type", contentType);
+  return `/api/files/view?${params.toString()}`;
 }

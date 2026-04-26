@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * GET /api/files/view?url=<cloudinary-url>
+ * GET /api/files/view?url=<cloudinary-url>&type=<mime>
  *
  * Streams a Cloudinary file through our server with `Content-Disposition: inline`
  * so PDFs (and other browser-renderable types) open in the viewer instead of
  * being force-downloaded — Cloudinary's default for `raw` resources is
- * `attachment`, which the browser treats as "save as".
+ * `attachment` plus `Content-Type: application/octet-stream`, which the
+ * browser treats as "save as".
  *
- * Security: we only proxy URLs hosted on the user's own Cloudinary cloud,
- * preventing this endpoint from being used as an SSRF vehicle to internal
- * services or third-party hosts.
+ * Content-Type resolution (highest priority first):
+ *   1. ?type=… query param (caller knows the original MIME — best)
+ *   2. URL extension sniff (.pdf, .png, etc.)
+ *   3. Upstream Content-Type (only if it's not the generic
+ *      application/octet-stream that prevents inline rendering)
+ *   4. application/octet-stream as a last resort
+ *
+ * Security: only proxies URLs hosted on the user's own Cloudinary cloud,
+ * preventing this endpoint from being used as an SSRF vehicle.
  */
 export async function GET(req: NextRequest) {
   const target = req.nextUrl.searchParams.get("url");
+  const explicitType = req.nextUrl.searchParams.get("type");
+
   if (!target) {
     return NextResponse.json(
       { error: "Missing url parameter" },
@@ -39,10 +48,7 @@ export async function GET(req: NextRequest) {
 
   let upstream: Response;
   try {
-    upstream = await fetch(target, {
-      // Cloudinary serves public CDN URLs — no auth needed.
-      cache: "no-store",
-    });
+    upstream = await fetch(target, { cache: "no-store" });
   } catch (err) {
     console.error("[files/view] fetch failed", err);
     return NextResponse.json(
@@ -58,21 +64,71 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Pull a sensible inline filename from the URL's last segment.
   const lastSeg = target.split("?")[0].split("/").pop() ?? "file";
   const filename = decodeURIComponent(lastSeg).replace(/[\r\n"]/g, "");
 
-  // Pass through useful headers, but rewrite content-disposition.
   const upstreamCT = upstream.headers.get("content-type");
   const upstreamLen = upstream.headers.get("content-length");
+
+  const contentType = resolveContentType({
+    explicit: explicitType,
+    url: target,
+    upstream: upstreamCT,
+  });
+
   const headers = new Headers();
-  if (upstreamCT) headers.set("content-type", upstreamCT);
+  headers.set("content-type", contentType);
   if (upstreamLen) headers.set("content-length", upstreamLen);
   headers.set("content-disposition", `inline; filename="${filename}"`);
-  // Browser-side caching for 5 min to keep PDF re-opens snappy.
+  // PDF viewer plugins generally want X-Content-Type-Options NOT to be
+  // nosniff so they can probe — leaving the header off is fine here.
   headers.set("cache-control", "private, max-age=300");
 
   return new NextResponse(upstream.body, { status: 200, headers });
 }
+
+function resolveContentType({
+  explicit,
+  url,
+  upstream,
+}: {
+  explicit: string | null;
+  url: string;
+  upstream: string | null;
+}): string {
+  if (explicit && /^[a-z]+\/[a-z0-9.+-]+/i.test(explicit)) return explicit;
+
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+  const sniffed = MIME_BY_EXT[ext];
+  if (sniffed) return sniffed;
+
+  // Use upstream only if it's not the generic catch-all that disables
+  // inline rendering.
+  if (upstream && !/^application\/octet-stream/i.test(upstream)) return upstream;
+
+  return upstream || "application/octet-stream";
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  txt: "text/plain; charset=utf-8",
+  md: "text/markdown; charset=utf-8",
+  csv: "text/csv; charset=utf-8",
+  json: "application/json",
+  html: "text/html; charset=utf-8",
+  xml: "application/xml",
+  zip: "application/zip",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
 
 export const runtime = "nodejs";

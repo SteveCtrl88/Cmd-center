@@ -288,6 +288,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             <NoteCard
               key={note._id}
               note={note}
+              projectId={projectId}
               onEdit={() => {
                 setEditingNote(note);
                 setEditorOpen(true);
@@ -321,13 +322,16 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
 
 function NoteCard({
   note,
+  projectId,
   onEdit,
   onDelete,
 }: {
   note: NoteItem;
+  projectId: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const qc = useQueryClient();
   const [expanded, setExpanded] = React.useState(false);
 
   // Strip HTML tags for the collapsed preview
@@ -409,7 +413,31 @@ function NoteCard({
               </h4>
               <FileAttachmentList
                 value={note.attachments}
-                onChange={() => { /* read-only display */ }}
+                readonly
+                onChange={async (next) => {
+                  // Persist the deletion immediately rather than waiting
+                  // for a full Edit→Save round-trip.
+                  try {
+                    await api(`/api/notes/${note._id}`, {
+                      method: "PATCH",
+                      json: {
+                        attachments: next.map((a) => ({
+                          publicId: a.publicId,
+                          url: a.url,
+                          name: a.name,
+                          contentType: a.contentType,
+                          size: a.size,
+                        })),
+                      },
+                    });
+                    qc.invalidateQueries({
+                      queryKey: ["project", projectId],
+                    });
+                    toast.success("Attachment removed");
+                  } catch (err) {
+                    toast.error((err as Error).message);
+                  }
+                }}
               />
             </div>
           )}

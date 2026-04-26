@@ -25,11 +25,17 @@ import {
 interface FileAttachmentListProps {
   value: NoteAttachment[];
   onChange: (attachments: NoteAttachment[]) => void;
+  /**
+   * When true, hide the upload dropzone — delete (X) is still functional
+   * so users can prune attachments from the read-only project view.
+   */
+  readonly?: boolean;
 }
 
 export function FileAttachmentList({
   value,
   onChange,
+  readonly = false,
 }: FileAttachmentListProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
@@ -85,54 +91,56 @@ export function FileAttachmentList({
         }}
       />
 
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.add(
-            "border-primary",
-            "bg-primary/5",
-            "border-solid"
-          );
-        }}
-        onDragLeave={(e) => {
-          e.currentTarget.classList.remove(
-            "border-primary",
-            "bg-primary/5",
-            "border-solid"
-          );
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.remove(
-            "border-primary",
-            "bg-primary/5",
-            "border-solid"
-          );
-          if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-        }}
-        className="flex items-center justify-between gap-2 rounded-md border-2 border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors"
-      >
-        <span>
-          {busy
-            ? "Uploading…"
-            : "Drop files here, or paste — 50MB max per file"}
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
+      {!readonly && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.currentTarget.classList.add(
+              "border-primary",
+              "bg-primary/5",
+              "border-solid"
+            );
+          }}
+          onDragLeave={(e) => {
+            e.currentTarget.classList.remove(
+              "border-primary",
+              "bg-primary/5",
+              "border-solid"
+            );
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.currentTarget.classList.remove(
+              "border-primary",
+              "bg-primary/5",
+              "border-solid"
+            );
+            if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+          }}
+          className="flex items-center justify-between gap-2 rounded-md border-2 border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors"
         >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
-          Add files
-        </Button>
-      </div>
+          <span>
+            {busy
+              ? "Uploading…"
+              : "Drop files here, or paste — 50MB max per file"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Add files
+          </Button>
+        </div>
+      )}
 
       {value.length > 0 && (
         <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -149,7 +157,7 @@ export function FileAttachmentList({
                 </div>
               </div>
               <a
-                href={inlineViewUrl(att.url)}
+                href={inlineViewUrl(att.url, att.contentType)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
