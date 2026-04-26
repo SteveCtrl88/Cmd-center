@@ -6,7 +6,6 @@ import {
   File,
   FileArchive,
   FileAudio,
-  FileImage,
   FileText,
   FileVideo,
   Loader2,
@@ -16,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { NoteAttachment } from "@/lib/api-client";
+import { thumbUrl, isCloudinaryImageUrl } from "@/lib/cloudinary-url";
 
 interface FileAttachmentListProps {
   value: NoteAttachment[];
@@ -136,7 +136,7 @@ export function FileAttachmentList({
               key={`${att.publicId}-${i}`}
               className="flex items-center gap-3 rounded-md border border-border bg-card p-3"
             >
-              <FileTypeIcon type={att.contentType} />
+              <AttachmentThumb attachment={att} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{att.name}</div>
                 <div className="text-xs text-muted-foreground">
@@ -170,10 +170,36 @@ export function FileAttachmentList({
   );
 }
 
+/**
+ * Renders either a Cloudinary thumbnail (for image attachments) or a
+ * type-appropriate file icon. Falls back to the icon if the thumbnail
+ * fails to load.
+ */
+function AttachmentThumb({ attachment }: { attachment: NoteAttachment }) {
+  const isImage =
+    attachment.contentType?.startsWith("image/") ||
+    isCloudinaryImageUrl(attachment.url);
+
+  const [errored, setErrored] = React.useState(false);
+
+  if (isImage && !errored) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={thumbUrl(attachment.url, 96)}
+        alt={attachment.name}
+        className="h-12 w-12 shrink-0 rounded object-cover"
+        onError={() => setErrored(true)}
+      />
+    );
+  }
+  return <FileTypeIcon type={attachment.contentType} />;
+}
+
 function FileTypeIcon({ type }: { type: string }) {
-  const cls = "h-9 w-9 shrink-0 rounded bg-muted p-2 text-muted-foreground";
+  const cls = "h-12 w-12 shrink-0 rounded bg-muted p-3 text-muted-foreground";
   if (!type) return <File className={cls} />;
-  if (type.startsWith("image/")) return <FileImage className={cls} />;
+  if (type.startsWith("image/")) return <File className={cls} />;
   if (type.startsWith("video/")) return <FileVideo className={cls} />;
   if (type.startsWith("audio/")) return <FileAudio className={cls} />;
   if (
