@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Model, type InferSchemaType } from "mongoose";
+import { PROJECT_COLOR_OPTIONS } from "@/lib/project-meta";
 
 /**
  * Drive reference sub-schema — populated in Phase 3b. Leaving the field
@@ -24,18 +25,6 @@ const DriveRefSchema = new Schema(
   { _id: true }
 );
 
-const PROJECT_COLORS = [
-  "blue",
-  "emerald",
-  "purple",
-  "amber",
-  "rose",
-  "indigo",
-  "cyan",
-  "orange",
-] as const;
-export type ProjectColor = (typeof PROJECT_COLORS)[number];
-
 const ProjectSchema = new Schema(
   {
     userId: { type: String, required: true, index: true },
@@ -43,7 +32,7 @@ const ProjectSchema = new Schema(
     description: { type: String, default: "", maxlength: 1000 },
     color: {
       type: String,
-      enum: PROJECT_COLORS,
+      enum: PROJECT_COLOR_OPTIONS,
       default: "blue",
     },
     tags: { type: [String], default: [] },
@@ -69,4 +58,6 @@ export const Project: Model<ProjectDoc> =
   (mongoose.models.Project as Model<ProjectDoc>) ||
   mongoose.model<ProjectDoc>("Project", ProjectSchema);
 
-export const PROJECT_COLOR_OPTIONS = PROJECT_COLORS;
+// Re-export so server-side route handlers can keep their existing imports.
+export { PROJECT_COLOR_OPTIONS } from "@/lib/project-meta";
+export type { ProjectColor } from "@/lib/project-meta";

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { api, type ProjectListItem } from "@/lib/api-client";
 import { PROJECT_COLOR_CLASSES } from "@/lib/project-colors";
-import type { ProjectColor } from "@/models/Project";
+import type { ProjectColor } from "@/lib/project-meta";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

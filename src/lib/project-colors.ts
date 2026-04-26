@@ -1,4 +1,4 @@
-import type { ProjectColor } from "@/models/Project";
+import type { ProjectColor } from "@/lib/project-meta";
 
 /**
  * Maps a project's color enum to Tailwind classes for the accent bar

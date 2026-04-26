@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { TagInput } from "@/components/planning/tag-input";
 import { ColorSwatchPicker } from "@/components/planning/color-swatch-picker";
-import { PROJECT_COLOR_OPTIONS } from "@/models/Project";
+import { PROJECT_COLOR_OPTIONS } from "@/lib/project-meta";
 
 type Color = (typeof PROJECT_COLOR_OPTIONS)[number];
 

@@ -3,9 +3,9 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROJECT_COLOR_CLASSES } from "@/lib/project-colors";
-import { PROJECT_COLOR_OPTIONS, type ProjectDoc } from "@/models/Project";
+import { PROJECT_COLOR_OPTIONS, type ProjectColor } from "@/lib/project-meta";
 
-type Color = NonNullable<ProjectDoc["color"]>;
+type Color = ProjectColor;
 
 interface ColorSwatchPickerProps {
   value: Color;

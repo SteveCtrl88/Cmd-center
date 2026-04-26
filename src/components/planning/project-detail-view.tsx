@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { api, type ProjectListItem, type NoteItem } from "@/lib/api-client";
 import { PROJECT_COLOR_CLASSES } from "@/lib/project-colors";
-import type { ProjectColor } from "@/models/Project";
+import type { ProjectColor } from "@/lib/project-meta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
