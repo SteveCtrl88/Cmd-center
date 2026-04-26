@@ -22,6 +22,7 @@ import {
   inlineViewUrl,
 } from "@/lib/cloudinary-url";
 import { uploadDirect } from "@/lib/cloudinary-upload";
+import { uploadToBlob } from "@/lib/blob-upload";
 
 interface FileAttachmentListProps {
   value: NoteAttachment[];
@@ -69,7 +70,12 @@ export function FileAttachmentList({
       arr.map(async (file, i) => {
         const localId = items[i].id;
         try {
-          const uploaded = await uploadDirect(file, {
+          // Images go to Cloudinary so we can transform/thumbnail them.
+          // Everything else (PDFs, docs, archives) goes to Vercel Blob,
+          // which has no file-type delivery restrictions like Cloudinary.
+          const isImage = file.type.startsWith("image/");
+          const uploader = isImage ? uploadDirect : uploadToBlob;
+          const uploaded = await uploader(file, {
             onProgress: (pct) => {
               setUploading((prev) =>
                 prev.map((u) => (u.id === localId ? { ...u, progress: pct } : u))

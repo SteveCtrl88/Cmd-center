@@ -31,16 +31,16 @@ export function thumbUrl(url: string, size = 96): string {
 }
 
 /**
- * Wraps a Cloudinary URL in our /api/files/view proxy so the file is served
- * with `Content-Disposition: inline` (browser preview) instead of the
- * default `attachment` (force download).
- *
- * Always pass the original contentType when known — it's the only reliable
- * way to get inline PDF rendering, since Cloudinary's `raw` resources are
- * served as `application/octet-stream`.
+ * For Cloudinary URLs, wraps them in our /api/files/view proxy so the file
+ * is served with `Content-Disposition: inline` (browser preview).
+ * For Vercel Blob (or any other URL), returns the URL unchanged — Blob
+ * already serves with proper inline disposition + content-type.
  */
 export function inlineViewUrl(url: string, contentType?: string): string {
   if (typeof url !== "string" || !url) return url;
+  // Only Cloudinary needs the proxy. Blob URLs (vercel-storage.com,
+  // public.blob.vercel-storage.com) are already public + inline-serving.
+  if (!/res\.cloudinary\.com/.test(url)) return url;
   const params = new URLSearchParams({ url });
   if (contentType) params.set("type", contentType);
   return `/api/files/view?${params.toString()}`;
