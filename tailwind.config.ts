@@ -7,6 +7,27 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  // Project-color classes are looked up via a runtime map
+  // (lib/project-colors.ts), so Tailwind's content scanner can't see them.
+  // Safelist them explicitly.
+  safelist: [
+    "bg-blue-500",
+    "bg-emerald-500",
+    "bg-purple-500",
+    "bg-amber-500",
+    "bg-rose-500",
+    "bg-indigo-500",
+    "bg-cyan-500",
+    "bg-orange-500",
+    "ring-blue-500",
+    "ring-emerald-500",
+    "ring-purple-500",
+    "ring-amber-500",
+    "ring-rose-500",
+    "ring-indigo-500",
+    "ring-cyan-500",
+    "ring-orange-500",
+  ],
   theme: {
     container: {
       center: true,
