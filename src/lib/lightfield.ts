@@ -153,6 +153,58 @@ export async function validateAuth(): Promise<unknown> {
   return lf("/auth/validate");
 }
 
+/**
+ * GET /v1/tasks — list all tasks (paginated). Tasks belong to opportunities,
+ * accounts, or contacts; each task has its own `fields` map and `relationships`
+ * pointing back to the parent record.
+ */
+export interface LightfieldTask {
+  id: string;
+  createdAt: string;
+  updatedAt?: string;
+  fields: Record<string, LightfieldField>;
+  relationships?: Record<
+    string,
+    { cardinality?: string; objectType?: string; values?: string[] }
+  >;
+  httpLink?: string;
+}
+
+export async function listTasks(opts: {
+  limit?: number;
+  maxRecords?: number;
+} = {}): Promise<LightfieldTask[]> {
+  const limit = Math.min(opts.limit ?? 25, 25);
+  const maxRecords = opts.maxRecords ?? 500;
+
+  const all: LightfieldTask[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+
+  while (all.length < maxRecords) {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (cursor) qs.set("cursor", cursor);
+
+    const page = await lf<ListResponse<LightfieldTask>>(
+      `/tasks?${qs.toString()}`
+    );
+    const items = page.data ?? [];
+    all.push(...items);
+
+    pages++;
+    if (pages > 20) break;
+    if (!page.hasMore) break;
+    cursor = page.nextCursor ?? page.cursor;
+    if (!cursor) break;
+  }
+
+  return all.slice(0, maxRecords);
+}
+
+export async function getTaskDefinitions(): Promise<unknown> {
+  return lf("/tasks/definitions");
+}
+
 export { LightfieldError };
 
 /**
