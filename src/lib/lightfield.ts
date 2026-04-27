@@ -205,6 +205,11 @@ export async function getTaskDefinitions(): Promise<unknown> {
   return lf("/tasks/definitions");
 }
 
+/** GET /v1/tasks/{id} — fetch a single task by id. */
+export async function getTask(id: string): Promise<LightfieldTask> {
+  return lf<LightfieldTask>(`/tasks/${encodeURIComponent(id)}`);
+}
+
 /**
  * Slim projected task suitable for embedding on a Deal doc / rendering
  * directly in the Kanban card. All values are JSON-friendly.

@@ -3,9 +3,9 @@ import { Deal } from "@/models/Deal";
 import {
   buildOptionLabelMap,
   getOpportunityDefinitions,
+  getTask,
   indexOpportunityTaskIds,
   listOpportunities,
-  listTasks,
   projectOpportunity,
   projectTask,
   type LightfieldOpportunity,
@@ -45,20 +45,26 @@ export async function syncLightfieldDeals(userId: string): Promise<SyncResult> {
 
   const opportunities = await listOpportunities({ maxRecords: 500 });
 
-  // Tasks: fetch all, project, build a map by id so we can attach each
-  // task to whichever deals link to it. If the tasks list errors we
-  // continue with empty task lists rather than abort.
-  let allTasks: ProjectedTask[] = [];
-  try {
-    const rawTasks = await listTasks({ maxRecords: 1000 });
-    allTasks = rawTasks.map(projectTask);
-  } catch (err) {
-    console.error("[syncLightfieldDeals] task fetch failed:", err);
-  }
-  const tasksById: Record<string, ProjectedTask> = {};
-  for (const t of allTasks) tasksById[t.id] = t;
-
+  // Tasks: walk each opp's $task relationship to collect linked task IDs,
+  // then fetch them individually via GET /v1/tasks/{id}. We can't use the
+  // /v1/tasks list endpoint here — verified it does NOT return every task
+  // in the account (some opp-linked tasks were missing from the listing).
   const taskIdsByOpp = indexOpportunityTaskIds(opportunities);
+  const allLinkedIds = Array.from(
+    new Set(Object.values(taskIdsByOpp).flat())
+  );
+  const tasksById: Record<string, ProjectedTask> = {};
+  await Promise.all(
+    allLinkedIds.map(async (id) => {
+      try {
+        const raw = await getTask(id);
+        tasksById[id] = projectTask(raw);
+      } catch (err) {
+        console.error("[syncLightfieldDeals] task fetch failed", id, err);
+      }
+    })
+  );
+  const fetchedTasks = Object.keys(tasksById).length;
   const now = new Date();
 
   let upserted = 0;
@@ -73,7 +79,7 @@ export async function syncLightfieldDeals(userId: string): Promise<SyncResult> {
 
   return {
     fetched: opportunities.length,
-    fetchedTasks: allTasks.length,
+    fetchedTasks,
     upserted,
     removedStale: 0,
     durationMs: Date.now() - startedAt,
