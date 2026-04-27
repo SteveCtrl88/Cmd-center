@@ -110,7 +110,8 @@ export async function listOpportunities(opts: {
   /** Hard cap so a runaway sync can't blow our cache. */
   maxRecords?: number;
 } = {}): Promise<LightfieldOpportunity[]> {
-  const limit = opts.limit ?? 100;
+  // Lightfield caps `limit` at 25 per page — we paginate to fetch more.
+  const limit = Math.min(opts.limit ?? 25, 25);
   const maxRecords = opts.maxRecords ?? 500;
 
   const all: LightfieldOpportunity[] = [];
