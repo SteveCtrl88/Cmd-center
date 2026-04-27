@@ -196,38 +196,52 @@ function pickField(
 }
 
 /**
- * Lightfield definitions endpoint returns the per-account schema, including
- * the option labels behind enum-typed fields like `$stage`. This is enough
- * shape to walk it without locking into Lightfield's full type:
+ * Lightfield definitions endpoint returns the per-account schema. The actual
+ * shape (verified live against this account):
  *
- *   { fields: { name: string, type: string, options?: [{id, value, label}] } }
+ *   {
+ *     objectType: "opportunity",
+ *     fieldDefinitions: {
+ *       "$stage": {
+ *         id, label, valueType: "SINGLE_SELECT",
+ *         typeConfiguration: { options: [{ id: "opt_xxx", label, description }] }
+ *       },
+ *       ...
+ *     },
+ *     relationshipDefinitions: { ... }
+ *   }
  *
- * We only care about `options`; everything else is opaque to us.
+ * We only care about the option lists nested under SINGLE_SELECT fields.
  */
 interface DefinitionsResponse {
-  fields?: Array<{
-    name?: string;
-    options?: Array<{ id?: string; value?: string; label?: string }>;
-  }>;
+  fieldDefinitions?: Record<
+    string,
+    {
+      id?: string;
+      label?: string;
+      valueType?: string;
+      typeConfiguration?: {
+        options?: Array<{ id?: string; label?: string; description?: string }>;
+      };
+    }
+  >;
 }
 
 /**
- * Build a lookup from option ids/values to their human labels for every
- * field that uses options. Stage values come back as `opt_<uuid>` from
- * the API and are useless to display directly — this map turns them
- * into "Qualified", "Proposal Sent", etc.
+ * Build a lookup from option ids to their human labels for every option-typed
+ * field. Stage values come back as `opt_<uuid>` from the API and are useless
+ * to display directly — this map turns them into "Lead", "Qualification",
+ * "Demo", "Trial", "Proposal", "Won", "Lost", etc.
  */
 export function buildOptionLabelMap(
   defs: unknown
 ): Record<string, string> {
   const out: Record<string, string> = {};
   const safe = defs as DefinitionsResponse;
-  for (const field of safe?.fields ?? []) {
-    for (const opt of field.options ?? []) {
-      const label = opt.label ?? opt.value ?? "";
-      if (!label) continue;
-      if (opt.id) out[opt.id] = label;
-      if (opt.value && opt.value !== opt.id) out[opt.value] = label;
+  for (const field of Object.values(safe?.fieldDefinitions ?? {})) {
+    for (const opt of field?.typeConfiguration?.options ?? []) {
+      if (!opt?.id || !opt?.label) continue;
+      out[opt.id] = opt.label;
     }
   }
   return out;
