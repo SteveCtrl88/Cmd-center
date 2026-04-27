@@ -1,6 +1,8 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { Deal } from "@/models/Deal";
 import {
+  buildOptionLabelMap,
+  getOpportunityDefinitions,
   listOpportunities,
   projectOpportunity,
   type LightfieldOpportunity,
@@ -27,12 +29,18 @@ export async function syncLightfieldDeals(userId: string): Promise<SyncResult> {
   const startedAt = Date.now();
   await connectToDatabase();
 
+  // Pull the per-account schema first so we can resolve `$stage` option
+  // IDs (`opt_xxx`) to human-readable labels. If definitions fail we
+  // continue with raw IDs rather than abort the entire sync.
+  const definitions = await getOpportunityDefinitions().catch(() => null);
+  const labels = buildOptionLabelMap(definitions);
+
   const opportunities = await listOpportunities({ maxRecords: 500 });
   const now = new Date();
 
   let upserted = 0;
   for (const o of opportunities) {
-    await upsertOpportunity(userId, o, now);
+    await upsertOpportunity(userId, o, now, labels);
     upserted++;
   }
 
@@ -47,9 +55,10 @@ export async function syncLightfieldDeals(userId: string): Promise<SyncResult> {
 async function upsertOpportunity(
   userId: string,
   o: LightfieldOpportunity,
-  cachedAt: Date
+  cachedAt: Date,
+  optionLabels: Record<string, string>
 ) {
-  const projected = projectOpportunity(o);
+  const projected = projectOpportunity(o, optionLabels);
 
   await Deal.updateOne(
     { userId, lightfieldId: o.id },

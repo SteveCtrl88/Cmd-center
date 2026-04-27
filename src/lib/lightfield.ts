@@ -164,10 +164,24 @@ export { LightfieldError };
 const FIELD_NAME_KEYS = ["$name", "name", "$title", "title"];
 const FIELD_STAGE_KEYS = ["$stage", "stage", "pipeline_stage"];
 const FIELD_AMOUNT_KEYS = ["$amount", "amount", "deal_amount", "$dealAmount"];
-const FIELD_NEXT_STEPS_KEYS = ["$nextSteps", "next_steps", "nextSteps"];
+const FIELD_NEXT_STEPS_KEYS = [
+  // Lightfield uses singular `$nextStep` per the live schema; keeping
+  // pluralized fallbacks too in case future configs differ.
+  "$nextStep",
+  "$nextSteps",
+  "next_steps",
+  "nextSteps",
+  "next_step",
+];
 const FIELD_OWNER_KEYS = ["$owner", "owner", "$assignedTo", "assignedTo"];
-const FIELD_DESCRIPTION_KEYS = ["$description", "description", "summary"];
+const FIELD_DESCRIPTION_KEYS = [
+  "$description",
+  "description",
+  "summary",
+  "$closeReason",
+];
 const FIELD_ACCOUNT_KEYS = ["$account", "account", "$accountName", "accountName"];
+const FIELD_OPPORTUNITY_STATUS_KEYS = ["$opportunityStatus", "opportunityStatus"];
 
 function pickField(
   fields: Record<string, LightfieldField> | undefined,
@@ -180,16 +194,70 @@ function pickField(
   return undefined;
 }
 
-export function projectOpportunity(o: LightfieldOpportunity) {
+/**
+ * Lightfield definitions endpoint returns the per-account schema, including
+ * the option labels behind enum-typed fields like `$stage`. This is enough
+ * shape to walk it without locking into Lightfield's full type:
+ *
+ *   { fields: { name: string, type: string, options?: [{id, value, label}] } }
+ *
+ * We only care about `options`; everything else is opaque to us.
+ */
+interface DefinitionsResponse {
+  fields?: Array<{
+    name?: string;
+    options?: Array<{ id?: string; value?: string; label?: string }>;
+  }>;
+}
+
+/**
+ * Build a lookup from option ids/values to their human labels for every
+ * field that uses options. Stage values come back as `opt_<uuid>` from
+ * the API and are useless to display directly — this map turns them
+ * into "Qualified", "Proposal Sent", etc.
+ */
+export function buildOptionLabelMap(
+  defs: unknown
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const safe = defs as DefinitionsResponse;
+  for (const field of safe?.fields ?? []) {
+    for (const opt of field.options ?? []) {
+      const label = opt.label ?? opt.value ?? "";
+      if (!label) continue;
+      if (opt.id) out[opt.id] = label;
+      if (opt.value && opt.value !== opt.id) out[opt.value] = label;
+    }
+  }
+  return out;
+}
+
+export function projectOpportunity(
+  o: LightfieldOpportunity,
+  optionLabels: Record<string, string> = {}
+) {
   const accountField = pickField(o.fields, FIELD_ACCOUNT_KEYS);
   const accountFromInline = o.account?.fields
     ? pickField(o.account.fields, FIELD_NAME_KEYS)
     : undefined;
 
+  const stageRaw = pickField(o.fields, FIELD_STAGE_KEYS);
+  const stage =
+    typeof stageRaw === "string" && optionLabels[stageRaw]
+      ? optionLabels[stageRaw]
+      : (stageRaw as string | undefined);
+
+  const statusRaw = pickField(o.fields, FIELD_OPPORTUNITY_STATUS_KEYS);
+  const status =
+    typeof statusRaw === "string" && optionLabels[statusRaw]
+      ? optionLabels[statusRaw]
+      : (statusRaw as string | undefined);
+
   return {
     id: o.id,
     name: pickField(o.fields, FIELD_NAME_KEYS) as string | undefined,
-    stage: pickField(o.fields, FIELD_STAGE_KEYS) as string | undefined,
+    stage,
+    status,
     amount: pickField(o.fields, FIELD_AMOUNT_KEYS) as number | string | undefined,
     nextSteps: pickField(o.fields, FIELD_NEXT_STEPS_KEYS) as string | undefined,
     owner: pickField(o.fields, FIELD_OWNER_KEYS) as string | undefined,
