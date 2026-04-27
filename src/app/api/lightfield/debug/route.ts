@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  buildOptionLabelMap,
+  getOpportunityDefinitions,
   listOpportunities,
   projectOpportunity,
   validateAuth,
@@ -30,20 +32,26 @@ export async function GET() {
       listError = err instanceof Error ? err.message : "List failed";
     }
 
+    const definitions = await getOpportunityDefinitions().catch((err) => ({
+      error: err instanceof Error ? err.message : "defs failed",
+    }));
+    const labels = buildOptionLabelMap(definitions);
+
     return NextResponse.json({
       ok: true,
       auth,
       sampleCount: opportunities.length,
       listError,
+      definitionsRaw: definitions,
+      optionLabelsCount: Object.keys(labels).length,
+      optionLabels: labels,
       first: opportunities[0]
         ? {
             raw: opportunities[0],
-            projected: projectOpportunity(opportunities[0]),
+            projected: projectOpportunity(opportunities[0], labels),
             fieldKeys: Object.keys(opportunities[0].fields ?? {}),
           }
         : null,
-      // Show all field keys across the sample so we can see what's actually
-      // in the schema (slugs may differ from the docs' system fields).
       allFieldKeys: Array.from(
         new Set(opportunities.flatMap((o) => Object.keys(o.fields ?? {})))
       ).sort(),
