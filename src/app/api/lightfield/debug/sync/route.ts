@@ -36,6 +36,18 @@ export async function GET() {
         owner: d.owner,
         cachedAt: d.cachedAt,
         lightfieldUpdatedAt: d.lightfieldUpdatedAt,
+        tasksCount: Array.isArray(
+          (d as unknown as { tasks?: unknown[] }).tasks
+        )
+          ? ((d as unknown as { tasks?: unknown[] }).tasks ?? []).length
+          : -1,
+        tasks: (d as unknown as { tasks?: unknown[] }).tasks ?? null,
+        // Show the raw $task relationship from cache so we can confirm
+        // the indexer would see it.
+        oppTaskRelFromCache:
+          (d as unknown as { rawFields?: Record<string, unknown> }).rawFields?.[
+            "$task"
+          ] ?? null,
       })),
     });
   } catch (err) {
