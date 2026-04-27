@@ -205,6 +205,62 @@ export async function getTaskDefinitions(): Promise<unknown> {
   return lf("/tasks/definitions");
 }
 
+/**
+ * Slim projected task suitable for embedding on a Deal doc / rendering
+ * directly in the Kanban card. All values are JSON-friendly.
+ */
+export interface ProjectedTask {
+  id: string;
+  title: string;
+  description: string;
+  status: string; // TODO | IN_PROGRESS | COMPLETE | CANCELLED
+  dueAt: string | null;
+  completedAt: string | null;
+  httpLink: string;
+}
+
+const TASK_FIELD_TITLE = ["$title", "title", "$name", "name"];
+const TASK_FIELD_DESCRIPTION = ["$description", "description"];
+const TASK_FIELD_STATUS = ["$status", "status"];
+const TASK_FIELD_DUE = ["$dueAt", "dueAt", "$dueDate", "dueDate"];
+const TASK_FIELD_COMPLETED = ["$completedAt", "completedAt"];
+
+export function projectTask(t: LightfieldTask): ProjectedTask {
+  const dueRaw = pickField(t.fields, TASK_FIELD_DUE);
+  const completedRaw = pickField(t.fields, TASK_FIELD_COMPLETED);
+  return {
+    id: t.id,
+    title: (pickField(t.fields, TASK_FIELD_TITLE) as string) ?? "",
+    description: (pickField(t.fields, TASK_FIELD_DESCRIPTION) as string) ?? "",
+    status: (pickField(t.fields, TASK_FIELD_STATUS) as string) ?? "TODO",
+    dueAt: typeof dueRaw === "string" ? dueRaw : null,
+    completedAt: typeof completedRaw === "string" ? completedRaw : null,
+    httpLink: t.httpLink ?? "",
+  };
+}
+
+/**
+ * Build a lookup from opportunityId → list of task IDs by walking each
+ * opportunity's `relationships.$task.values`. The opp side is authoritative
+ * here — the reverse `task.relationships.$opportunity` is sometimes empty
+ * even when the forward link exists.
+ */
+export function indexOpportunityTaskIds(
+  opportunities: LightfieldOpportunity[]
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const opp of opportunities) {
+    // The shape isn't in our LightfieldOpportunity interface, so reach into
+    // the unknown bag for relationships.
+    const rels = (opp as unknown as {
+      relationships?: Record<string, { values?: string[] }>;
+    }).relationships;
+    const taskIds = rels?.["$task"]?.values ?? [];
+    if (taskIds.length) out[opp.id] = taskIds;
+  }
+  return out;
+}
+
 export { LightfieldError };
 
 /**

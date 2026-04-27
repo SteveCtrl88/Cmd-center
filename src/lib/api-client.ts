@@ -52,6 +52,17 @@ export interface ProjectListItem {
   updatedAt: string;
 }
 
+export interface DealTask {
+  id: string;
+  title: string;
+  description: string;
+  /** TODO | IN_PROGRESS | COMPLETE | CANCELLED */
+  status: string;
+  dueAt?: string;
+  completedAt?: string;
+  httpLink: string;
+}
+
 export interface DealItem {
   _id: string;
   userId: string;
@@ -65,6 +76,7 @@ export interface DealItem {
   description: string;
   httpLink: string;
   followUps: { _id?: string; task: string; assignee: string; dueDate?: string }[];
+  tasks: DealTask[];
   rawFields: Record<string, { value: unknown; valueType?: string }>;
   lightfieldCreatedAt?: string;
   lightfieldUpdatedAt?: string;

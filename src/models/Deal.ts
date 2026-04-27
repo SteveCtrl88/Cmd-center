@@ -16,6 +16,23 @@ const FollowUpSchema = new Schema(
   { _id: true }
 );
 
+/**
+ * Lightfield Task projected onto a slim shape we can render directly. Embedded
+ * on the Deal so /api/deals returns everything the Kanban needs in one round-trip.
+ */
+const TaskSchema = new Schema(
+  {
+    id: { type: String, required: true }, // Lightfield task id
+    title: { type: String, default: "" },
+    description: { type: String, default: "" },
+    status: { type: String, default: "TODO" }, // TODO|IN_PROGRESS|COMPLETE|CANCELLED
+    dueAt: { type: Date },
+    completedAt: { type: Date },
+    httpLink: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const DealSchema = new Schema(
   {
     userId: { type: String, required: true, index: true },
@@ -31,7 +48,8 @@ const DealSchema = new Schema(
     owner: { type: String, default: "" },
     description: { type: String, default: "" },
     httpLink: { type: String, default: "" },
-    followUps: { type: [FollowUpSchema], default: [] }, // populated when we wire Tasks lookup
+    followUps: { type: [FollowUpSchema], default: [] }, // legacy / future free-form
+    tasks: { type: [TaskSchema], default: [] }, // tasks linked to this opportunity
 
     // Raw fields blob — kept verbatim so the UI can pivot if our projection misses something
     rawFields: { type: Schema.Types.Mixed, default: {} },
